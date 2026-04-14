@@ -83,6 +83,9 @@ actor ScanEngine {
 
     private func scanUserCache() -> CategoryResult {
         var items: [CleanableItem] = []
+        // Exclude vendor roots claimed by dedicated categories from the broad
+        // ~/Library/Caches pass, then re-add the vendor root explicitly below so
+        // unrelated app caches remain visible and we only avoid double-counting.
         let excludedRootPaths = Set([
             "\(home)/Library/Caches/com.apple.Safari",
             "\(home)/Library/Caches/Google",

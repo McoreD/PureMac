@@ -79,6 +79,7 @@ open build/Build/Products/Release/PureMac.app
 - **Large & Old Files** - files over 100 MB or older than 1 year
 - **Purgeable Space** - APFS purgeable disk space detection
 - **Xcode Junk** - DerivedData, Archives, simulator caches
+- **Visual Studio Junk** - `bin` and `obj` build outputs from .NET projects
 - **Brew Cache** - Homebrew download cache (detects custom HOMEBREW_CACHE)
 - **Scheduled Cleaning** - automatic scans on configurable intervals
 

@@ -90,6 +90,7 @@
 "Large & Old Files" = "Large & Old Files";
 "Purgeable Space" = "Purgeable Space";
 "Xcode Junk" = "Xcode Junk";
+"Visual Studio Junk" = "Visual Studio Junk";
 "Brew Cache" = "Brew Cache";
 
 /* Category Descriptions */
@@ -102,6 +103,7 @@
 "Files over 100 MB or older than 1 year" = "Files over 100 MB or older than 1 year";
 "APFS purgeable disk space" = "APFS purgeable disk space";
 "Derived data, archives, and simulators" = "Derived data, archives, and simulators";
+"bin and obj build outputs from .NET projects" = "bin and obj build outputs from .NET projects";
 "Homebrew download cache" = "Homebrew download cache";
 
 /* Schedule Intervals */

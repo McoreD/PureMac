@@ -11,6 +11,7 @@ enum CleaningCategory: String, CaseIterable, Identifiable, Codable {
     case largeFiles = "Large & Old Files"
     case purgeableSpace = "Purgeable Space"
     case xcodeJunk = "Xcode Junk"
+    case visualStudioJunk = "Visual Studio Junk"
     case brewCache = "Brew Cache"
 
     var id: String { rawValue }
@@ -25,6 +26,7 @@ enum CleaningCategory: String, CaseIterable, Identifiable, Codable {
         case .largeFiles: return "doc.fill"
         case .purgeableSpace: return "arrow.3.trianglepath"
         case .xcodeJunk: return "hammer.fill"
+        case .visualStudioJunk: return "chevron.left.forwardslash.chevron.right"
         case .brewCache: return "mug.fill"
         }
     }
@@ -39,6 +41,7 @@ enum CleaningCategory: String, CaseIterable, Identifiable, Codable {
         case .largeFiles: return "Files over 100 MB or older than 1 year"
         case .purgeableSpace: return "APFS purgeable disk space"
         case .xcodeJunk: return "Derived data, archives, and simulators"
+        case .visualStudioJunk: return "bin and obj build outputs from .NET projects"
         case .brewCache: return "Homebrew download cache"
         }
     }
@@ -53,6 +56,7 @@ enum CleaningCategory: String, CaseIterable, Identifiable, Codable {
         case .largeFiles: return .yellow
         case .purgeableSpace: return .green
         case .xcodeJunk: return .cyan
+        case .visualStudioJunk: return .indigo
         case .brewCache: return .mint
         }
     }

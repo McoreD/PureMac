@@ -2,6 +2,8 @@ import Foundation
 
 actor CleaningEngine {
     private let fileManager = FileManager.default
+    private let dotNetProjectExtensions = Set(["csproj", "fsproj", "vbproj", "shproj", "vcxproj"])
+    private let visualStudioArtifactDirectoryNames = Set(["bin", "obj"])
 
     struct CleaningResult {
         var freedSpace: Int64 = 0
@@ -110,6 +112,7 @@ actor CleaningEngine {
     /// Prevents symlink attacks where a link in ~/Library/Caches points to ~/.ssh or ~/Documents.
     private func isSafeToDelete(resolvedPath: String) -> Bool {
         let home = fileManager.homeDirectoryForCurrentUser.path
+        let normalizedPath = (resolvedPath as NSString).standardizingPath
         let allowedRoots = [
             "\(home)/Library/Caches",
             "\(home)/Library/Logs",
@@ -132,9 +135,33 @@ actor CleaningEngine {
             "/private/var/tmp",
             "/tmp",
         ]
-        // Reject if resolved path is not inside any allowed root
-        return allowedRoots.contains { root in
-            resolvedPath.hasPrefix(root)
+        if allowedRoots.contains(where: { root in
+            normalizedPath.hasPrefix(root)
+        }) {
+            return true
+        }
+
+        return isVisualStudioBuildArtifact(path: normalizedPath)
+    }
+
+    private func isVisualStudioBuildArtifact(path: String) -> Bool {
+        let home = fileManager.homeDirectoryForCurrentUser.path
+        guard path.hasPrefix("\(home)/") else { return false }
+
+        let artifactURL = URL(fileURLWithPath: path)
+        let artifactName = artifactURL.lastPathComponent.lowercased()
+        guard visualStudioArtifactDirectoryNames.contains(artifactName) else { return false }
+
+        let projectDirectory = artifactURL.deletingLastPathComponent().path
+        return directoryContainsDotNetProject(at: projectDirectory)
+    }
+
+    private func directoryContainsDotNetProject(at path: String) -> Bool {
+        guard let contents = try? fileManager.contentsOfDirectory(atPath: path) else { return false }
+
+        return contents.contains { item in
+            let itemExtension = URL(fileURLWithPath: item).pathExtension.lowercased()
+            return dotNetProjectExtensions.contains(itemExtension)
         }
     }
 

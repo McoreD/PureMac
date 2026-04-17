@@ -89,6 +89,7 @@
 "Large & Old Files" = "大型與舊檔案";
 "Purgeable Space" = "可清除空間";
 "Xcode Junk" = "Xcode 垃圾";
+"Visual Studio Junk" = "Visual Studio 垃圾";
 "Brew Cache" = "Brew 快取";
 
 /* Category Descriptions */
@@ -100,6 +101,7 @@
 "Files over 100 MB or older than 1 year" = "超過 100 MB 或超過一年未使用的檔案";
 "APFS purgeable disk space" = "APFS 可清除磁碟空間";
 "Derived data, archives, and simulators" = "衍生資料、封存檔與模擬器";
+"bin and obj build outputs from .NET projects" = ".NET 專案的 bin 與 obj 建置輸出";
 "Homebrew download cache" = "Homebrew 下載快取";
 
 /* Schedule Intervals */

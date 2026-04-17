@@ -3,6 +3,9 @@ import Foundation
 actor ScanEngine {
     private let fileManager = FileManager.default
     private let home = FileManager.default.homeDirectoryForCurrentUser.path
+    private let dotNetProjectExtensions = Set(["csproj", "fsproj", "vbproj", "shproj", "vcxproj"])
+    private let visualStudioArtifactDirectoryNames = Set(["bin", "obj"])
+    private let visualStudioIgnoredDirectoryNames = Set([".git", ".svn", ".hg", "node_modules", "Pods", "Carthage", ".build", "build", "DerivedData", "bin", "obj"])
 
     private struct CleanupTarget {
         let name: String
@@ -29,6 +32,8 @@ actor ScanEngine {
             return scanPurgeableSpace()
         case .xcodeJunk:
             return scanXcodeJunk()
+        case .visualStudioJunk:
+            return scanVisualStudioJunk()
         case .brewCache:
             return scanBrewCache()
         }
@@ -337,7 +342,118 @@ actor ScanEngine {
         return CategoryResult(category: .brewCache, items: items, totalSize: totalSize)
     }
 
+    private func scanVisualStudioJunk() -> CategoryResult {
+        var items: [CleanableItem] = []
+        var seenProjectDirectories: Set<String> = []
+
+        for root in visualStudioSearchRoots() {
+            items.append(contentsOf: scanVisualStudioArtifacts(in: root, seenProjectDirectories: &seenProjectDirectories))
+        }
+
+        let uniqueItems = deduplicatedItems(items)
+        let totalSize = uniqueItems.reduce(0) { $0 + $1.size }
+        return CategoryResult(category: .visualStudioJunk, items: uniqueItems, totalSize: totalSize)
+    }
+
     // MARK: - Helpers
+
+    private func visualStudioSearchRoots() -> [String] {
+        let candidatePaths = [
+            "\(home)/Developer",
+            "\(home)/Projects",
+            "\(home)/Code",
+            "\(home)/Workspace",
+            "\(home)/Workspaces",
+            "\(home)/Source",
+            "\(home)/Sources",
+            "\(home)/src",
+            "\(home)/Repos",
+            "\(home)/Repositories",
+            "\(home)/GitHub",
+            "\(home)/Documents",
+            "\(home)/Desktop",
+            "\(home)/Library/CloudStorage",
+            "\(home)/Library/Mobile Documents/com~apple~CloudDocs",
+        ]
+
+        var uniqueRoots: [String] = []
+        var seenPaths: Set<String> = []
+
+        for path in candidatePaths {
+            let normalized = normalizePath(path)
+            guard seenPaths.insert(normalized).inserted,
+                  fileManager.fileExists(atPath: normalized),
+                  fileManager.isReadableFile(atPath: normalized) else { continue }
+            uniqueRoots.append(normalized)
+        }
+
+        return uniqueRoots
+    }
+
+    private func scanVisualStudioArtifacts(
+        in rootPath: String,
+        seenProjectDirectories: inout Set<String>
+    ) -> [CleanableItem] {
+        guard let enumerator = fileManager.enumerator(
+            at: URL(fileURLWithPath: rootPath),
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+
+        var items: [CleanableItem] = []
+        let rootDepth = URL(fileURLWithPath: rootPath).pathComponents.count
+
+        for case let fileURL as URL in enumerator {
+            let depth = fileURL.pathComponents.count - rootDepth
+
+            if depth > 8 {
+                enumerator.skipDescendants()
+                continue
+            }
+
+            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey]) else {
+                continue
+            }
+
+            if resourceValues.isSymbolicLink == true {
+                enumerator.skipDescendants()
+                continue
+            }
+
+            if resourceValues.isDirectory == true {
+                let directoryName = fileURL.lastPathComponent.lowercased()
+                if visualStudioIgnoredDirectoryNames.contains(directoryName) {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
+            guard resourceValues.isRegularFile == true else { continue }
+
+            let projectExtension = fileURL.pathExtension.lowercased()
+            guard dotNetProjectExtensions.contains(projectExtension) else { continue }
+
+            let projectDirectory = normalizePath(fileURL.deletingLastPathComponent().path)
+            guard seenProjectDirectories.insert(projectDirectory).inserted else { continue }
+
+            for artifactDirectory in visualStudioArtifactDirectoryNames.sorted() {
+                let artifactPath = (projectDirectory as NSString).appendingPathComponent(artifactDirectory)
+                guard let item = makeCleanupItem(
+                    name: makeVisualStudioArtifactName(projectDirectory: projectDirectory, artifactDirectory: artifactDirectory),
+                    path: artifactPath,
+                    category: .visualStudioJunk
+                ) else { continue }
+                items.append(item)
+            }
+        }
+
+        return items
+    }
+
+    private func makeVisualStudioArtifactName(projectDirectory: String, artifactDirectory: String) -> String {
+        let projectName = URL(fileURLWithPath: projectDirectory).lastPathComponent
+        return "\(projectName)/\(artifactDirectory)"
+    }
 
     private func scanDirectory(
         path: String,

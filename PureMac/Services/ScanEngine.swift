@@ -6,6 +6,14 @@ actor ScanEngine {
     private let dotNetProjectExtensions = Set(["csproj", "fsproj", "vbproj", "shproj", "vcxproj"])
     private let visualStudioArtifactDirectoryNames = Set(["bin", "obj"])
     private let visualStudioIgnoredDirectoryNames = Set([".git", ".svn", ".hg", "node_modules", "Pods", "Carthage", ".build", "build", "DerivedData", "bin", "obj"])
+    private let visualStudioIgnoredRootPaths = Set([
+        "/System",
+        "/dev",
+        "/net",
+        "/proc",
+        "/Volumes",
+        "/private/var/vm",
+    ])
 
     private struct CleanupTarget {
         let name: String
@@ -358,60 +366,35 @@ actor ScanEngine {
     // MARK: - Helpers
 
     private func visualStudioSearchRoots() -> [String] {
-        let candidatePaths = [
-            "\(home)/Developer",
-            "\(home)/Projects",
-            "\(home)/Code",
-            "\(home)/Workspace",
-            "\(home)/Workspaces",
-            "\(home)/Source",
-            "\(home)/Sources",
-            "\(home)/src",
-            "\(home)/Repos",
-            "\(home)/Repositories",
-            "\(home)/GitHub",
-            "\(home)/Documents",
-            "\(home)/Desktop",
-            "\(home)/Library/CloudStorage",
-            "\(home)/Library/Mobile Documents/com~apple~CloudDocs",
-        ]
-
-        var uniqueRoots: [String] = []
-        var seenPaths: Set<String> = []
-
-        for path in candidatePaths {
-            let normalized = normalizePath(path)
-            guard seenPaths.insert(normalized).inserted,
-                  fileManager.fileExists(atPath: normalized),
-                  fileManager.isReadableFile(atPath: normalized) else { continue }
-            uniqueRoots.append(normalized)
-        }
-
-        return uniqueRoots
+        ["/"]
     }
 
     private func scanVisualStudioArtifacts(
         in rootPath: String,
         seenProjectDirectories: inout Set<String>
     ) -> [CleanableItem] {
+        let rootURL = URL(fileURLWithPath: rootPath)
+        let rootVolumeIdentifier = try? rootURL.resourceValues(forKeys: [.volumeIdentifierKey]).volumeIdentifier
+
         guard let enumerator = fileManager.enumerator(
-            at: URL(fileURLWithPath: rootPath),
+            at: rootURL,
             includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: [.skipsPackageDescendants]
         ) else { return [] }
 
         var items: [CleanableItem] = []
-        let rootDepth = URL(fileURLWithPath: rootPath).pathComponents.count
+        let rootDepth = rootURL.pathComponents.count
 
         for case let fileURL as URL in enumerator {
+            let normalizedPath = normalizePath(fileURL.path)
             let depth = fileURL.pathComponents.count - rootDepth
 
-            if depth > 8 {
+            if depth > 16 {
                 enumerator.skipDescendants()
                 continue
             }
 
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey]) else {
+            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .volumeIdentifierKey]) else {
                 continue
             }
 
@@ -420,9 +403,17 @@ actor ScanEngine {
                 continue
             }
 
+            if let rootVolumeIdentifier,
+               let volumeIdentifier = resourceValues.volumeIdentifier,
+               !NSString(string: volumeIdentifier.description).isEqual(to: rootVolumeIdentifier.description) {
+                enumerator.skipDescendants()
+                continue
+            }
+
             if resourceValues.isDirectory == true {
                 let directoryName = fileURL.lastPathComponent.lowercased()
-                if visualStudioIgnoredDirectoryNames.contains(directoryName) {
+                if visualStudioIgnoredDirectoryNames.contains(directoryName) ||
+                    visualStudioIgnoredRootPaths.contains(normalizedPath) {
                     enumerator.skipDescendants()
                 }
                 continue

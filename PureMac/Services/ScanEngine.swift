@@ -5,15 +5,6 @@ actor ScanEngine {
     private let home = FileManager.default.homeDirectoryForCurrentUser.path
     private let dotNetProjectExtensions = Set(["csproj", "fsproj", "vbproj", "shproj", "vcxproj"])
     private let visualStudioArtifactDirectoryNames = Set(["bin", "obj"])
-    private let visualStudioIgnoredDirectoryNames = Set([".git", ".svn", ".hg", "node_modules", "Pods", "Carthage", ".build", "build", "DerivedData", "bin", "obj"])
-    private let visualStudioIgnoredRootPaths = Set([
-        "/System",
-        "/dev",
-        "/net",
-        "/proc",
-        "/Volumes",
-        "/private/var/vm",
-    ])
 
     private struct CleanupTarget {
         let name: String
@@ -352,81 +343,9 @@ actor ScanEngine {
 
     private func scanVisualStudioJunk() -> CategoryResult {
         var items: [CleanableItem] = []
-        var seenProjectDirectories: Set<String> = []
+        let projectDirectories = findVisualStudioProjectDirectories()
 
-        for root in visualStudioSearchRoots() {
-            items.append(contentsOf: scanVisualStudioArtifacts(in: root, seenProjectDirectories: &seenProjectDirectories))
-        }
-
-        let uniqueItems = deduplicatedItems(items)
-        let totalSize = uniqueItems.reduce(0) { $0 + $1.size }
-        return CategoryResult(category: .visualStudioJunk, items: uniqueItems, totalSize: totalSize)
-    }
-
-    // MARK: - Helpers
-
-    private func visualStudioSearchRoots() -> [String] {
-        ["/"]
-    }
-
-    private func scanVisualStudioArtifacts(
-        in rootPath: String,
-        seenProjectDirectories: inout Set<String>
-    ) -> [CleanableItem] {
-        let rootURL = URL(fileURLWithPath: rootPath)
-        let rootVolumeIdentifier = try? rootURL.resourceValues(forKeys: [.volumeIdentifierKey]).volumeIdentifier
-
-        guard let enumerator = fileManager.enumerator(
-            at: rootURL,
-            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
-            options: [.skipsPackageDescendants]
-        ) else { return [] }
-
-        var items: [CleanableItem] = []
-        let rootDepth = rootURL.pathComponents.count
-
-        for case let fileURL as URL in enumerator {
-            let normalizedPath = normalizePath(fileURL.path)
-            let depth = fileURL.pathComponents.count - rootDepth
-
-            if depth > 16 {
-                enumerator.skipDescendants()
-                continue
-            }
-
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .volumeIdentifierKey]) else {
-                continue
-            }
-
-            if resourceValues.isSymbolicLink == true {
-                enumerator.skipDescendants()
-                continue
-            }
-
-            if let rootVolumeIdentifier,
-               let volumeIdentifier = resourceValues.volumeIdentifier,
-               !NSString(string: volumeIdentifier.description).isEqual(to: rootVolumeIdentifier.description) {
-                enumerator.skipDescendants()
-                continue
-            }
-
-            if resourceValues.isDirectory == true {
-                let directoryName = fileURL.lastPathComponent.lowercased()
-                if visualStudioIgnoredDirectoryNames.contains(directoryName) ||
-                    visualStudioIgnoredRootPaths.contains(normalizedPath) {
-                    enumerator.skipDescendants()
-                }
-                continue
-            }
-
-            guard resourceValues.isRegularFile == true else { continue }
-
-            let projectExtension = fileURL.pathExtension.lowercased()
-            guard dotNetProjectExtensions.contains(projectExtension) else { continue }
-
-            let projectDirectory = normalizePath(fileURL.deletingLastPathComponent().path)
-            guard seenProjectDirectories.insert(projectDirectory).inserted else { continue }
-
+        for projectDirectory in projectDirectories {
             for artifactDirectory in visualStudioArtifactDirectoryNames.sorted() {
                 let artifactPath = (projectDirectory as NSString).appendingPathComponent(artifactDirectory)
                 guard let item = makeCleanupItem(
@@ -438,7 +357,46 @@ actor ScanEngine {
             }
         }
 
-        return items
+        let uniqueItems = deduplicatedItems(items)
+        let totalSize = uniqueItems.reduce(0) { $0 + $1.size }
+        return CategoryResult(category: .visualStudioJunk, items: uniqueItems, totalSize: totalSize)
+    }
+
+    // MARK: - Helpers
+
+    private func findVisualStudioProjectDirectories() -> [String] {
+        let query = dotNetProjectExtensions
+            .sorted()
+            .map { "kMDItemFSName == '*.\($0)'c" }
+            .joined(separator: " || ")
+
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
+        task.arguments = ["-onlyin", "/", query]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            guard task.terminationStatus == 0 else { return [] }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let output = String(data: data, encoding: .utf8) else { return [] }
+
+            let directories = output
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .map { normalizePath(URL(fileURLWithPath: $0).deletingLastPathComponent().path) }
+
+            return Array(Set(directories)).sorted()
+        } catch {
+            Logger.shared.log("mdfind Visual Studio scan failed: \(error.localizedDescription)", level: .warning)
+            return []
+        }
     }
 
     private func makeVisualStudioArtifactName(projectDirectory: String, artifactDirectory: String) -> String {

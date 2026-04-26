@@ -83,6 +83,7 @@
 
 /* Cleaning Categories */
 "System Junk" = "System Junk";
+"System Data" = "System Data";
 "User Cache" = "User Cache";
 "AI Apps" = "AI Apps";
 "Mail Files" = "Mail Files";
@@ -96,6 +97,7 @@
 /* Category Descriptions */
 "Scan everything at once" = "Scan everything at once";
 "System caches, logs, and temporary files" = "System caches, logs, and temporary files";
+"Mobile device backups and macOS installers" = "Mobile device backups and macOS installers";
 "Application caches and browser data" = "Application caches and browser data";
 "Logs, caches, and temporary files from local AI apps" = "Logs, caches, and temporary files from local AI apps";
 "Downloaded mail attachments" = "Downloaded mail attachments";

@@ -83,6 +83,7 @@
 
 /* Cleaning Categories */
 "System Junk" = "系統垃圾";
+"System Data" = "系統資料";
 "User Cache" = "使用者快取";
 "Mail Files" = "郵件檔案";
 "Trash Bins" = "垃圾桶";
@@ -95,6 +96,7 @@
 /* Category Descriptions */
 "Scan everything at once" = "一次掃描所有項目";
 "System caches, logs, and temporary files" = "系統快取、記錄檔及暫存檔案";
+"Mobile device backups and macOS installers" = "行動裝置備份與 macOS 安裝器";
 "Application caches and browser data" = "應用程式快取與瀏覽器資料";
 "Downloaded mail attachments" = "已下載的郵件附件";
 "Files in your Trash" = "垃圾桶中的檔案";

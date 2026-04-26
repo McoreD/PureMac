@@ -73,6 +73,7 @@ open build/Build/Products/Release/PureMac.app
 ### System Cleaner
 - **Smart Scan** - one-click scan across all categories
 - **System Junk** - system caches, logs, and temporary files
+- **System Data** - opt-in cleanup for local iPhone/iPad backups, completed macOS installers, and mobile software updates
 - **User Cache** - dynamically discovers all app caches (no hardcoded app list)
 - **Mail Attachments** - downloaded mail attachments
 - **Trash Bins** - empty all Trash
@@ -95,6 +96,7 @@ open build/Build/Products/Release/PureMac.app
 - Symlink attack prevention - resolves and validates paths before deletion
 - System app protection - Apple apps cannot be uninstalled
 - Large & Old Files are never auto-selected
+- System Data backups and installers are detected but not auto-selected
 - Structured logging via `os.log` (visible in Console.app)
 
 ## Screenshots

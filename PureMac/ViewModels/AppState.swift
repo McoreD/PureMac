@@ -28,6 +28,7 @@ final class AppState: ObservableObject {
     @Published var showCleanConfirmation = false
     @Published var lastCleanedDate: Date?
     @Published var deselectedItems: Set<UUID> = []
+    @Published var selectedItems: Set<UUID> = []
     @Published var hasFullDiskAccess: Bool = true
     @Published var fdaBannerDismissed: Bool = false
 
@@ -172,14 +173,26 @@ final class AppState: ObservableObject {
     // MARK: - Selection
 
     func isItemSelected(_ item: CleanableItem) -> Bool {
-        !deselectedItems.contains(item.id)
+        if item.isSelected {
+            return !deselectedItems.contains(item.id)
+        }
+
+        return selectedItems.contains(item.id)
     }
 
     func toggleItem(_ item: CleanableItem) {
-        if deselectedItems.contains(item.id) {
-            deselectedItems.remove(item.id)
+        if isItemSelected(item) {
+            if item.isSelected {
+                deselectedItems.insert(item.id)
+            } else {
+                selectedItems.remove(item.id)
+            }
         } else {
-            deselectedItems.insert(item.id)
+            if item.isSelected {
+                deselectedItems.remove(item.id)
+            } else {
+                selectedItems.insert(item.id)
+            }
         }
     }
 
@@ -187,13 +200,20 @@ final class AppState: ObservableObject {
         guard let result = categoryResults[category] else { return }
         for item in result.items {
             deselectedItems.remove(item.id)
+            if !item.isSelected {
+                selectedItems.insert(item.id)
+            }
         }
     }
 
     func deselectAllInCategory(_ category: CleaningCategory) {
         guard let result = categoryResults[category] else { return }
         for item in result.items {
-            deselectedItems.insert(item.id)
+            if item.isSelected {
+                deselectedItems.insert(item.id)
+            } else {
+                selectedItems.remove(item.id)
+            }
         }
     }
 
@@ -276,6 +296,7 @@ final class AppState: ObservableObject {
         totalJunkSize = 0
         scanProgress = 0
         deselectedItems.removeAll()
+        selectedItems.removeAll()
 
         Task {
             let categories = CleaningCategory.scannable
@@ -307,6 +328,7 @@ final class AppState: ObservableObject {
         Task {
             scanProgress = 0.5
             deselectedItems.removeAll()
+            selectedItems.removeAll()
             let result = await scanEngine.scanCategory(category)
             categoryResults[category] = result
 
@@ -340,6 +362,8 @@ final class AppState: ObservableObject {
 
             categoryResults = [:]
             totalJunkSize = 0
+            deselectedItems.removeAll()
+            selectedItems.removeAll()
             scanState = .cleaned
             loadDiskInfo()
 
@@ -371,6 +395,10 @@ final class AppState: ObservableObject {
 
             categoryResults.removeValue(forKey: category)
             totalJunkSize = categoryResults.values.reduce(0) { $0 + $1.totalSize }
+            for item in selectedItems {
+                deselectedItems.remove(item.id)
+                self.selectedItems.remove(item.id)
+            }
             scanState = .cleaned
             loadDiskInfo()
 

@@ -5,6 +5,7 @@ import SwiftUI
 enum CleaningCategory: String, CaseIterable, Identifiable, Codable {
     case smartScan = "Smart Scan"
     case systemJunk = "System Junk"
+    case systemData = "System Data"
     case userCache = "User Cache"
     case mailAttachments = "Mail Files"
     case trashBins = "Trash Bins"
@@ -20,6 +21,7 @@ enum CleaningCategory: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .smartScan: return "sparkles"
         case .systemJunk: return "gearshape.fill"
+        case .systemData: return "internaldrive.fill"
         case .userCache: return "internaldrive.fill"
         case .mailAttachments: return "envelope.fill"
         case .trashBins: return "trash.fill"
@@ -35,6 +37,7 @@ enum CleaningCategory: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .smartScan: return "Scan everything at once"
         case .systemJunk: return "System caches, logs, and temporary files"
+        case .systemData: return "Mobile device backups and macOS installers"
         case .userCache: return "Application caches and browser data"
         case .mailAttachments: return "Downloaded mail attachments"
         case .trashBins: return "Files in your Trash"
@@ -50,6 +53,7 @@ enum CleaningCategory: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .smartScan: return .accentColor
         case .systemJunk: return .purple
+        case .systemData: return .teal
         case .userCache: return .blue
         case .mailAttachments: return .orange
         case .trashBins: return .red

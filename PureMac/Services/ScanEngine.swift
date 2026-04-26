@@ -19,6 +19,8 @@ actor ScanEngine {
             return CategoryResult(category: category, items: [], totalSize: 0)
         case .systemJunk:
             return scanSystemJunk()
+        case .systemData:
+            return scanSystemData()
         case .userCache:
             return scanUserCache()
         case .mailAttachments:
@@ -92,6 +94,82 @@ actor ScanEngine {
 
         totalSize = items.reduce(0) { $0 + $1.size }
         return CategoryResult(category: .systemJunk, items: items, totalSize: totalSize)
+    }
+
+    private func scanSystemData() -> CategoryResult {
+        let items = deduplicatedItems(scanMobileDeviceBackups() + scanMacOSInstallers() + scanMobileSoftwareUpdates())
+            .sorted { $0.size > $1.size }
+        let totalSize = items.reduce(0) { $0 + $1.size }
+        return CategoryResult(category: .systemData, items: items, totalSize: totalSize)
+    }
+
+    private func scanMobileDeviceBackups() -> [CleanableItem] {
+        let backupRoot = "\(home)/Library/Application Support/MobileSync/Backup"
+        guard let backupNames = try? fileManager.contentsOfDirectory(atPath: backupRoot) else { return [] }
+
+        return backupNames.compactMap { backupName in
+            let backupPath = (backupRoot as NSString).appendingPathComponent(backupName)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: backupPath, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { return nil }
+
+            let size = directorySize(path: backupPath)
+            guard size > 1024 else { return nil }
+
+            return CleanableItem(
+                name: mobileBackupDisplayName(backupPath: backupPath, fallbackName: backupName),
+                path: backupPath,
+                size: size,
+                category: .systemData,
+                isSelected: false,
+                lastModified: mobileBackupDate(backupPath: backupPath) ?? fileModDate(path: backupPath)
+            )
+        }
+    }
+
+    private func scanMacOSInstallers() -> [CleanableItem] {
+        let appRoots = ["/Applications", "\(home)/Applications"]
+        var installers: [CleanableItem] = []
+
+        for appRoot in appRoots {
+            guard let appNames = try? fileManager.contentsOfDirectory(atPath: appRoot) else { continue }
+
+            for appName in appNames where isMacOSInstallerAppName(appName) {
+                let appPath = (appRoot as NSString).appendingPathComponent(appName)
+                guard fileManager.fileExists(atPath: appPath) else { continue }
+
+                let size = directorySize(path: appPath)
+                guard size > 1024 else { continue }
+
+                installers.append(CleanableItem(
+                    name: appName,
+                    path: appPath,
+                    size: size,
+                    category: .systemData,
+                    isSelected: false,
+                    lastModified: fileModDate(path: appPath)
+                ))
+            }
+        }
+
+        return installers
+    }
+
+    private func scanMobileSoftwareUpdates() -> [CleanableItem] {
+        let updateRoots = [
+            "\(home)/Library/iTunes/iPhone Software Updates",
+            "\(home)/Library/iTunes/iPad Software Updates",
+            "\(home)/Library/iTunes/iPod Software Updates",
+        ]
+
+        return updateRoots.compactMap { path in
+            makeCleanupItem(
+                name: URL(fileURLWithPath: path).lastPathComponent,
+                path: path,
+                category: .systemData,
+                isSelected: false
+            )
+        }
     }
 
     private func scanUserCache() -> CategoryResult {
@@ -244,6 +322,7 @@ actor ScanEngine {
                     isSelected: false,
                     lastModified: snapshot.date
                 ))
+                totalSize += snapshotSize
             }
         }
 
@@ -467,7 +546,12 @@ actor ScanEngine {
         return items
     }
 
-    private func makeCleanupItem(name: String, path: String, category: CleaningCategory) -> CleanableItem? {
+    private func makeCleanupItem(
+        name: String,
+        path: String,
+        category: CleaningCategory,
+        isSelected: Bool = true
+    ) -> CleanableItem? {
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
               fileManager.isReadableFile(atPath: path) else { return nil }
@@ -480,7 +564,7 @@ actor ScanEngine {
                 path: path,
                 size: size,
                 category: category,
-                isSelected: true,
+                isSelected: isSelected,
                 lastModified: fileModDate(path: path)
             )
         }
@@ -494,9 +578,36 @@ actor ScanEngine {
             path: path,
             size: size,
             category: category,
-            isSelected: true,
+            isSelected: isSelected,
             lastModified: attrs[.modificationDate] as? Date
         )
+    }
+
+    private func mobileBackupDisplayName(backupPath: String, fallbackName: String) -> String {
+        let infoPath = (backupPath as NSString).appendingPathComponent("Info.plist")
+        guard let info = NSDictionary(contentsOfFile: infoPath) as? [String: Any] else {
+            return "Mobile Device Backup: \(fallbackName)"
+        }
+
+        if let deviceName = info["Device Name"] as? String, !deviceName.isEmpty {
+            return "Mobile Device Backup: \(deviceName)"
+        }
+
+        if let displayName = info["Display Name"] as? String, !displayName.isEmpty {
+            return "Mobile Device Backup: \(displayName)"
+        }
+
+        return "Mobile Device Backup: \(fallbackName)"
+    }
+
+    private func mobileBackupDate(backupPath: String) -> Date? {
+        let infoPath = (backupPath as NSString).appendingPathComponent("Info.plist")
+        guard let info = NSDictionary(contentsOfFile: infoPath) as? [String: Any] else { return nil }
+        return info["Last Backup Date"] as? Date
+    }
+
+    private func isMacOSInstallerAppName(_ appName: String) -> Bool {
+        appName.hasPrefix("Install macOS ") && appName.hasSuffix(".app")
     }
 
     private func deduplicatedItems(_ items: [CleanableItem]) -> [CleanableItem] {
